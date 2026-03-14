@@ -1,19 +1,21 @@
 import streamlit as st
 import pandas as pd
 import tempfile
-
-from rpy2.robjects import r
-from rpy2.robjects import pandas2ri
 import rpy2.robjects as ro
 
-pandas2ri.activate()
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
+from rpy2.robjects import default_converter
+
 
 st.title("GTSummary Table Generator")
 
-file = st.file_uploader("Upload Excel File", type=["xlsx","csv"])
+# Upload dataset
+file = st.file_uploader("Upload Excel or CSV", type=["xlsx","csv"])
 
 if file:
 
+    # read file
     if file.name.endswith(".csv"):
         df = pd.read_csv(file)
     else:
@@ -29,31 +31,34 @@ if file:
 
     if variables:
 
-        st.subheader("Select Data Type")
+        st.subheader("Select Variable Type")
 
         for v in variables:
 
             datatype[v] = st.selectbox(
-                f"{v} type",
+                f"{v}",
                 ["continuous","categorical"],
                 key=v
             )
 
     if st.button("Generate Table"):
 
-        rdf = pandas2ri.py2rpy(df)
+        # convert pandas → R dataframe
+        with localconverter(default_converter + pandas2ri.converter):
+            r_df = ro.conversion.py2rpy(df)
 
-        ro.globalenv["data_py"] = rdf
+        ro.globalenv["data_py"] = r_df
         ro.globalenv["var_list"] = ro.StrVector(variables)
 
         types = [datatype[v] for v in variables]
         ro.globalenv["type_list"] = ro.StrVector(types)
 
+        # temp file for word output
         temp_doc = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-
         ro.globalenv["outfile"] = temp_doc.name
 
-        r('''
+        # R code
+        ro.r('''
         library(gtsummary)
         library(flextable)
         library(dplyr)
@@ -87,9 +92,10 @@ if file:
         save_as_docx(ft, path = outfile)
         ''')
 
-        st.success("Table Created")
+        st.success("Table Created Successfully")
 
         with open(temp_doc.name, "rb") as f:
+
             st.download_button(
                 "Download Table (Word)",
                 f,
