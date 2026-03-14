@@ -1,37 +1,31 @@
 import streamlit as st
 import pandas as pd
+import subprocess
 import tempfile
-import rpy2.robjects as ro
-
-from rpy2.robjects import pandas2ri
-from rpy2.robjects.conversion import localconverter
-from rpy2.robjects import default_converter
-
+import json
+import os
 
 st.title("GTSummary Table Generator")
 
-# Upload dataset
 file = st.file_uploader("Upload Excel or CSV", type=["xlsx","csv"])
 
 if file:
 
-    # read file
     if file.name.endswith(".csv"):
         df = pd.read_csv(file)
     else:
         df = pd.read_excel(file)
 
-    st.subheader("Data Preview")
+    st.subheader("Preview")
     st.dataframe(df.head())
 
-    # select variables
-    variables = st.multiselect("Select Variables", df.columns)
+    variables = st.multiselect("Select variables", df.columns)
 
     datatype = {}
 
     if variables:
 
-        st.subheader("Select Variable Type")
+        st.subheader("Select variable type")
 
         for v in variables:
 
@@ -43,61 +37,38 @@ if file:
 
     if st.button("Generate Table"):
 
-        # convert pandas → R dataframe
-        with localconverter(default_converter + pandas2ri.converter):
-            r_df = ro.conversion.py2rpy(df)
+        temp_dir = tempfile.mkdtemp()
 
-        ro.globalenv["data_py"] = r_df
-        ro.globalenv["var_list"] = ro.StrVector(variables)
+        data_path = os.path.join(temp_dir,"data.csv")
+        json_path = os.path.join(temp_dir,"vars.json")
+        output_doc = os.path.join(temp_dir,"table.docx")
 
-        types = [datatype[v] for v in variables]
-        ro.globalenv["type_list"] = ro.StrVector(types)
+        df.to_csv(data_path,index=False)
 
-        # temp file for word output
-        temp_doc = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-        ro.globalenv["outfile"] = temp_doc.name
-
-        # R code
-        ro.r('''
-        library(gtsummary)
-        library(flextable)
-        library(dplyr)
-        library(officer)
-
-        data <- data_py
-
-        vars <- var_list
-        types <- type_list
-
-        data2 <- data %>% select(all_of(vars))
-
-        type_formula <- list()
-
-        for(i in seq_along(vars)){
-            if(types[i] == "continuous"){
-                type_formula[[vars[i]]] <- "continuous"
-            } else {
-                type_formula[[vars[i]]] <- "categorical"
-            }
+        config = {
+            "variables":variables,
+            "types":[datatype[v] for v in variables]
         }
 
-        tbl <- data2 %>%
-        tbl_summary(type = type_formula)
+        with open(json_path,"w") as f:
+            json.dump(config,f)
 
-        ft <- as_flex_table(tbl)
+        cmd = [
+            "Rscript",
+            "gtsummary_script.R",
+            data_path,
+            json_path,
+            output_doc
+        ]
 
-        ft <- fontsize(ft, size = 11)
-        ft <- font(ft, fontname = "Calibri")
+        subprocess.run(cmd)
 
-        save_as_docx(ft, path = outfile)
-        ''')
+        st.success("Table Created")
 
-        st.success("Table Created Successfully")
-
-        with open(temp_doc.name, "rb") as f:
+        with open(output_doc,"rb") as f:
 
             st.download_button(
-                "Download Table (Word)",
+                "Download Word Table",
                 f,
-                file_name="gtsummary_table.docx"
+                "gtsummary_table.docx"
             )
