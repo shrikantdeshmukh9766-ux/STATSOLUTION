@@ -653,18 +653,23 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader(
-    "📁 मास्टर यादी अपलोड करा (Excel / CSV)",
-    type=["xlsx", "xls", "csv"],
-    help="फाइलमध्ये किमान 'asha' आणि 'Paticipant' कॉलम असणे आवश्यक आहे"
-)
+import requests
 
-if uploaded_file is not None:
+MASTER_URL = "https://raw.githubusercontent.com/shrikantdeshmukh9766-ux/STATSOLUTION/main/Participant%20list.xlsx"
+
+if "master_df" not in st.session_state:
+    with st.spinner("GitHub वरून मास्टर यादी लोड होत आहे..."):
+        try:
+            resp = requests.get(MASTER_URL, timeout=15)
+            resp.raise_for_status()
+            st.session_state.master_df = pd.read_excel(io.BytesIO(resp.content))
+            st.success("✅ मास्टर यादी यशस्वीरित्या लोड झाली!")
+        except Exception as e:
+            st.error(f"⚠️ GitHub वरून फाइल लोड करताना त्रुटी: {e}")
+
+if "master_df" in st.session_state:
     try:
-        if uploaded_file.name.endswith(".csv"):
-            master_df = pd.read_csv(uploaded_file)
-        else:
-            master_df = pd.read_excel(uploaded_file)
+        master_df = st.session_state.master_df.copy()
 
         # Normalise column names — case-insensitive match
         master_df.columns = master_df.columns.str.strip()
@@ -827,9 +832,9 @@ if uploaded_file is not None:
                 )
 
     except Exception as e:
-        st.error(f"⚠️ फाइल वाचताना त्रुटी आली: {e}")
+        st.error(f"⚠️ डेटा प्रक्रिया करताना त्रुटी आली: {e}")
 else:
-    st.info("📁 वरील बटणावरून मास्टर सहभागी यादी अपलोड करा.")
+    st.info("⏳ मास्टर यादी लोड होत आहे, कृपया प्रतीक्षा करा...")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
