@@ -640,6 +640,200 @@ with dl_col3:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # =====================
+# REMAINING PARTICIPANTS SECTION
+# =====================
+st.markdown("""
+<div class="section-card">
+    <div class="section-header">
+        <div class="section-icon icon-blue3">📂</div>
+        <div>
+            <p class="section-title">तक्ता ४ · उर्वरित सहभागी यादी</p>
+            <p class="section-desc">मास्टर यादीतील सहभागी जे अद्याप आशाने नोंदवले नाहीत</p>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
+
+uploaded_file = st.file_uploader(
+    "📁 मास्टर यादी अपलोड करा (Excel / CSV)",
+    type=["xlsx", "xls", "csv"],
+    help="फाइलमध्ये किमान 'asha' आणि 'Paticipant' कॉलम असणे आवश्यक आहे"
+)
+
+if uploaded_file is not None:
+    try:
+        if uploaded_file.name.endswith(".csv"):
+            master_df = pd.read_csv(uploaded_file)
+        else:
+            master_df = pd.read_excel(uploaded_file)
+
+        # Normalise column names — case-insensitive match
+        master_df.columns = master_df.columns.str.strip()
+        col_map = {c: c for c in master_df.columns}
+        for c in master_df.columns:
+            if c.lower() == 'asha':
+                col_map[c] = 'asha'
+            if c.lower() in ['paticipant', 'participant']:
+                col_map[c] = 'Paticipant'
+        master_df = master_df.rename(columns=col_map)
+
+        if 'asha' not in master_df.columns or 'Paticipant' not in master_df.columns:
+            st.error("⚠️ फाइलमध्ये 'asha' आणि 'Paticipant' कॉलम आढळले नाहीत. कृपया फाइल तपासा.")
+        else:
+            master_df['asha']       = master_df['asha'].astype(str).str.strip()
+            master_df['Paticipant'] = master_df['Paticipant'].astype(str).str.strip()
+            df['asha']              = df['asha'].astype(str).str.strip()
+            df['Paticipant']        = df['Paticipant'].astype(str).str.strip()
+
+            master_ashas = sorted(master_df['asha'].unique())
+
+            # ── ASHA-wise summary table ──
+            st.markdown("""
+            <div style="font-size:15px; font-weight:700; color:#1b4f72; margin:18px 0 10px 0;">
+                📊 आशानिहाय उर्वरित सहभागी सारांश
+            </div>
+            """, unsafe_allow_html=True)
+
+            summary_rows = []
+            for a in master_ashas:
+                m_set = set(master_df[master_df['asha'] == a]['Paticipant'])
+                s_set = set(df[df['asha'] == a]['Paticipant'])
+                summary_rows.append({
+                    '👩‍⚕️ आशा':        a,
+                    '📋 मास्टर यादी':  len(m_set),
+                    '✅ नोंदवलेले':    len(s_set & m_set),
+                    '⏳ उर्वरित':      len(m_set - s_set),
+                })
+            summary_df = pd.DataFrame(summary_rows).sort_values('⏳ उर्वरित', ascending=False)
+            summary_df.index = range(1, len(summary_df) + 1)
+            summary_df.index.name = 'अ.क्र.'
+
+            def light_amber_cmap():
+                return mcolors.LinearSegmentedColormap.from_list("light_amber", ["#ffffff", "#fde5b4"])
+
+            styled_summary = (
+                summary_df.style
+                .background_gradient(cmap=light_teal_cmap(),  subset=['✅ नोंदवलेले'])
+                .background_gradient(cmap=light_amber_cmap(), subset=['⏳ उर्वरित'])
+                .set_properties(**{'font-family': 'Baloo 2, sans-serif', 'font-size': '13px', 'color': '#1b4f72'})
+                .set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#d6eaf8'), ('color', '#1b4f72'),
+                                                  ('font-weight', '700'), ('font-size', '13px'),
+                                                  ('border', '1px solid #b8d9f0')]},
+                    {'selector': 'td', 'props': [('border', '1px solid #eaf4fb')]},
+                ])
+            )
+
+            st.dataframe(
+                styled_summary,
+                use_container_width=True,
+                height=min(400, (len(summary_df) + 1) * 38 + 10)
+            )
+
+            # Download ASHA-wise summary
+            buf_summary = io.BytesIO()
+            with pd.ExcelWriter(buf_summary, engine='openpyxl') as w:
+                summary_df.to_excel(w, sheet_name='आशानिहाय उर्वरित', index=True)
+            st.download_button(
+                label="⬇️ आशानिहाय सारांश Excel डाउनलोड करा",
+                data=buf_summary.getvalue(),
+                file_name="आशानिहाय_उर्वरित_सारांश.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            st.markdown("<hr style='margin:20px 0'/>", unsafe_allow_html=True)
+            st.markdown("""
+            <div style="font-size:15px; font-weight:700; color:#1b4f72; margin:0 0 10px 0;">
+                🔍 आशानिहाय उर्वरित सहभागी तपशील
+            </div>
+            """, unsafe_allow_html=True)
+
+            rem_col1, rem_col2 = st.columns([2, 4])
+            with rem_col1:
+                selected_asha_rem = st.selectbox(
+                    "👩‍⚕️ आशा निवडा",
+                    master_ashas,
+                    key="remaining_asha_select",
+                    help="मास्टर यादीतील आशा"
+                )
+
+            master_participants   = set(master_df[master_df['asha'] == selected_asha_rem]['Paticipant'])
+            submitted_participants = set(df[df['asha'] == selected_asha_rem]['Paticipant'])
+            remaining             = sorted(master_participants - submitted_participants)
+
+            total_master    = len(master_participants)
+            total_submitted = len(submitted_participants & master_participants)
+            total_remaining = len(remaining)
+
+            st.markdown(f"""
+            <div style="display:flex; gap:14px; margin:14px 0 18px 0;">
+                <div style="background:#dbeeff; border-radius:12px; padding:14px 20px; flex:1; border:1px solid rgba(255,255,255,0.7);">
+                    <div style="font-size:11px; color:#4a6070; font-weight:600; text-transform:uppercase; letter-spacing:0.7px;">मास्टर यादी</div>
+                    <div style="font-size:26px; font-weight:800; color:#1a6fa6;">{total_master}</div>
+                </div>
+                <div style="background:#dff5ec; border-radius:12px; padding:14px 20px; flex:1; border:1px solid rgba(255,255,255,0.7);">
+                    <div style="font-size:11px; color:#4a6070; font-weight:600; text-transform:uppercase; letter-spacing:0.7px;">नोंदवलेले</div>
+                    <div style="font-size:26px; font-weight:800; color:#1a8a5a;">{total_submitted}</div>
+                </div>
+                <div style="background:#fef3dc; border-radius:12px; padding:14px 20px; flex:1; border:1px solid rgba(255,255,255,0.7);">
+                    <div style="font-size:11px; color:#4a6070; font-weight:600; text-transform:uppercase; letter-spacing:0.7px;">उर्वरित</div>
+                    <div style="font-size:26px; font-weight:800; color:#b5770a;">{total_remaining}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if total_remaining == 0:
+                st.success(f"✅ {selected_asha_rem} यांनी मास्टर यादीतील सर्व सहभागी नोंदवले आहेत!")
+            else:
+                remaining_df = pd.DataFrame({
+                    '👩‍⚕️ आशा': selected_asha_rem,
+                    '👤 सहभागी': remaining
+                })
+                remaining_df.index = range(1, len(remaining_df) + 1)
+                remaining_df.index.name = 'अ.क्र.'
+
+                styled_rem = (
+                    remaining_df.style
+                    .set_properties(**{
+                        'font-family': 'Baloo 2, sans-serif',
+                        'font-size':   '13px',
+                        'color':       '#1b4f72'
+                    })
+                    .set_table_styles([
+                        {'selector': 'th',
+                         'props': [('background-color', '#d6eaf8'),
+                                   ('color', '#1b4f72'),
+                                   ('font-weight', '700'),
+                                   ('font-size', '13px'),
+                                   ('border', '1px solid #b8d9f0')]},
+                        {'selector': 'td',
+                         'props': [('border', '1px solid #eaf4fb')]},
+                    ])
+                )
+
+                st.dataframe(
+                    styled_rem,
+                    use_container_width=True,
+                    height=min(420, (len(remaining_df) + 1) * 38 + 10)
+                )
+
+                buf_rem = io.BytesIO()
+                with pd.ExcelWriter(buf_rem, engine='openpyxl') as w:
+                    remaining_df.to_excel(w, sheet_name='उर्वरित सहभागी', index=True)
+                st.download_button(
+                    label="⬇️ उर्वरित यादी Excel मध्ये डाउनलोड करा",
+                    data=buf_rem.getvalue(),
+                    file_name=f"उर्वरित_सहभागी_{selected_asha_rem}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+    except Exception as e:
+        st.error(f"⚠️ फाइल वाचताना त्रुटी आली: {e}")
+else:
+    st.info("📁 वरील बटणावरून मास्टर सहभागी यादी अपलोड करा.")
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# =====================
 # FOOTER
 # =====================
 st.markdown("""
