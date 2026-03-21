@@ -412,7 +412,7 @@ st.markdown(f"""
     <div class="metric-card metric-card-3">
         <span class="metric-icon">👥</span>
         <div class="metric-value-3">{total_participants}</div>
-        <div class="metric-label">अनन्य सहभागी</div>
+        <div class="metric-label">युनिक सहभागी</div>
     </div>
     <div class="metric-card metric-card-4">
         <span class="metric-icon">⚠️</span>
