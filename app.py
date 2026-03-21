@@ -430,7 +430,7 @@ st.markdown("""
     <div class="section-header">
         <div class="section-icon icon-blue1">📅</div>
         <div>
-            <p class="section-title">तक्ता १: आशा फॉर्म भरलेले (महिन्यानुसार)</p>
+            <p class="section-title">तक्ता १: महिन्यानुसार भरलेल्या फॉर्मची संख्या</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
